@@ -2,6 +2,8 @@
 
 create extension if not exists "pgcrypto";
 
+grant usage on schema public to postgres, anon, authenticated, service_role;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   name text not null,
@@ -175,3 +177,11 @@ create policy "Users can delete own screenshots"
     bucket_id = 'screenshots'
     and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- Table privileges (RLS still applies for anon/authenticated; service_role bypasses RLS)
+grant all on table public.profiles to postgres, anon, authenticated, service_role;
+grant all on table public.feedback to postgres, anon, authenticated, service_role;
+grant all on table public.comments to postgres, anon, authenticated, service_role;
+
+grant all on all sequences in schema public to postgres, anon, authenticated, service_role;
+grant execute on function public.is_admin() to anon, authenticated, service_role;
