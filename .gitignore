@@ -40,8 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# local data
-/data/*
-!/data/.gitkeep
-/public/uploads/*
-!/public/uploads/.gitkeep
+# local uploads (unused; screenshots go to Supabase Storage)
+/public/uploads/
+/data/
