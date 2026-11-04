@@ -1,20 +1,64 @@
-import { cookies } from "next/headers";
-import { getUser, listUsers } from "./db";
-import type { User } from "./types";
+import { createClient } from "@/lib/supabase/server";
+import type { Role, User } from "@/lib/types";
 
-export const USER_COOKIE = "signal_user";
+export async function getCurrentUser(): Promise<User | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-export async function getCurrentUser(): Promise<User> {
-  const jar = await cookies();
-  const id = jar.get(USER_COOKIE)?.value;
-  if (id) {
-    const user = getUser(id);
-    if (user) return user;
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, name, email, role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    return {
+      id: user.id,
+      name:
+        (user.user_metadata?.name as string | undefined) ||
+        user.email?.split("@")[0] ||
+        "User",
+      email: user.email || "",
+      role: "member",
+    };
   }
-  // Default to a member submitter for the demo persona switcher
-  return listUsers().find((u) => u.role === "member") ?? listUsers()[0];
+
+  return {
+    id: profile.id,
+    name: profile.name,
+    email: profile.email,
+    role: profile.role as Role,
+  };
 }
 
-export function isAdmin(user: User) {
-  return user.role === "admin";
+export function isAdmin(user: User | null | undefined) {
+  return user?.role === "admin";
+}
+
+export async function requireUser(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new AuthError("Sign in required", 401);
+  }
+  return user;
+}
+
+export async function requireAdmin(): Promise<User> {
+  const user = await requireUser();
+  if (!isAdmin(user)) {
+    throw new AuthError("Admins only", 403);
+  }
+  return user;
+}
+
+export class AuthError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
 }

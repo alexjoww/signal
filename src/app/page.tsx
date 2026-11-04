@@ -1,7 +1,25 @@
+import Link from "next/link";
 import { SubmitForm } from "@/components/SubmitForm";
 import { getCurrentUser } from "@/lib/auth";
+import { hasSupabaseConfig } from "@/lib/supabase/env";
 
 export default async function HomePage() {
+  if (!hasSupabaseConfig()) {
+    return (
+      <div className="mx-auto max-w-xl px-5 py-16 sm:px-8">
+        <h1 className="font-[family-name:var(--font-display)] text-4xl tracking-[-0.04em]">
+          Configure Supabase
+        </h1>
+        <p className="mt-4 text-[var(--ink-soft)]">
+          Set <code>NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
+          <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>, and{" "}
+          <code>SUPABASE_SECRET_KEY</code>, then run the SQL migration and seed
+          script.
+        </p>
+      </div>
+    );
+  }
+
   const user = await getCurrentUser();
 
   return (
@@ -19,13 +37,47 @@ export default async function HomePage() {
           and follow-ups in one place.
         </p>
         <p className="mt-8 text-sm text-[var(--ink-soft)]">
-          Signed in as <strong className="text-[var(--ink)]">{user.name}</strong>
-          {user.role === "admin" ? " · you can triage the board" : ""}.
+          {user ? (
+            <>
+              Signed in as <strong className="text-[var(--ink)]">{user.name}</strong>
+              {user.role === "admin" ? " · you can triage the board" : ""}.
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="font-medium text-[var(--signal-deep)]">
+                Sign in
+              </Link>{" "}
+              or{" "}
+              <Link href="/signup" className="font-medium text-[var(--signal-deep)]">
+                create an account
+              </Link>{" "}
+              to send a signal.
+            </>
+          )}
         </p>
       </section>
 
       <section>
-        <SubmitForm />
+        {user ? (
+          <SubmitForm />
+        ) : (
+          <div className="animate-rise-delay rounded-[28px] border border-[var(--line)] bg-[color-mix(in_oklab,white_70%,var(--paper))] p-8 shadow-[var(--shadow)]">
+            <h2 className="font-[family-name:var(--font-display)] text-2xl tracking-[-0.03em]">
+              Org accounts only
+            </h2>
+            <p className="mt-3 text-[var(--ink-soft)]">
+              Sign in with your Supabase-backed org account to submit feedback.
+            </p>
+            <div className="mt-6 flex gap-2">
+              <Link href="/login" className="btn btn-primary">
+                Sign in
+              </Link>
+              <Link href="/signup" className="btn btn-ghost">
+                Join
+              </Link>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

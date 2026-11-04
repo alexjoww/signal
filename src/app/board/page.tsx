@@ -12,9 +12,8 @@ export default async function BoardPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const user = await getCurrentUser();
-  if (!isAdmin(user)) {
-    redirect("/");
-  }
+  if (!user) redirect("/login");
+  if (!isAdmin(user)) redirect("/");
 
   const sp = await searchParams;
   const pick = (k: string) => {
@@ -22,14 +21,14 @@ export default async function BoardPage({
     return Array.isArray(v) ? v[0] : v;
   };
 
-  const items = listFeedback({
+  const items = await listFeedback({
     status: (pick("status") as FeedbackStatus | "all") || "all",
     team: pick("team"),
     product_area: pick("product_area"),
     type: (pick("type") as FeedbackType | "all") || "all",
     q: pick("q"),
   });
-  const counts = countByStatus();
+  const counts = await countByStatus();
 
   return (
     <div className="mx-auto w-full max-w-6xl px-5 pb-20 pt-4 sm:px-8">

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { TriagePanel } from "@/components/TriagePanel";
 import { getCurrentUser, isAdmin } from "@/lib/auth";
 import { getFeedback, listComments } from "@/lib/db";
@@ -10,12 +10,14 @@ export default async function ItemPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+
   const { id } = await params;
-  const item = getFeedback(id);
+  const item = await getFeedback(id);
   if (!item) notFound();
 
-  const user = await getCurrentUser();
-  const comments = listComments(id);
+  const comments = await listComments(id);
   const canTriage = isAdmin(user);
 
   return (
@@ -29,7 +31,9 @@ export default async function ItemPage({
 
       <div className="mt-6 grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
         <article className="animate-rise">
-          <p className={`text-sm font-semibold uppercase tracking-[0.14em] type-${item.type}`}>
+          <p
+            className={`text-sm font-semibold uppercase tracking-[0.14em] type-${item.type}`}
+          >
             {TYPE_LABELS[item.type]}
           </p>
           <h1 className="mt-3 font-[family-name:var(--font-display)] text-4xl tracking-[-0.04em] sm:text-5xl">
