@@ -1,20 +1,19 @@
 import Link from "next/link";
 import { SubmitForm } from "@/components/SubmitForm";
 import { getCurrentUser } from "@/lib/auth";
-import { hasSupabaseConfig } from "@/lib/supabase/env";
+import { hasDatabaseConfig } from "@/lib/db/pool";
 
 export default async function HomePage() {
-  if (!hasSupabaseConfig()) {
+  if (!hasDatabaseConfig()) {
     return (
       <div className="mx-auto max-w-xl px-5 py-16 sm:px-8">
         <h1 className="font-[family-name:var(--font-display)] text-4xl tracking-[-0.04em]">
-          Configure Supabase
+          Configure database
         </h1>
         <p className="mt-4 text-[var(--ink-soft)]">
-          Set <code>NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
-          <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>, and{" "}
-          <code>SUPABASE_SECRET_KEY</code>, then run the SQL migration and seed
-          script.
+          Set the <code>DATABASE_URL</code> secret to your Supabase Postgres
+          connection string, run the SQL migration, then{" "}
+          <code>npm run db:seed</code>.
         </p>
       </div>
     );
@@ -66,7 +65,7 @@ export default async function HomePage() {
               Org accounts only
             </h2>
             <p className="mt-3 text-[var(--ink-soft)]">
-              Sign in with your Supabase-backed org account to submit feedback.
+              Sign in to submit feedback to the triage board.
             </p>
             <div className="mt-6 flex gap-2">
               <Link href="/login" className="btn btn-primary">

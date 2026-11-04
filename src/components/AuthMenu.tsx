@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createClient } from "@/lib/supabase/client";
 import type { User } from "@/lib/types";
 
 export function AuthMenu({ user }: { user: User | null }) {
@@ -26,8 +25,7 @@ export function AuthMenu({ user }: { user: User | null }) {
 
   async function signOut() {
     setOpen(false);
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/logout", { method: "POST" });
     startTransition(() => {
       router.push("/login");
       router.refresh();
