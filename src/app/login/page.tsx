@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
 import { getCurrentUser } from "@/lib/auth";
-import { hasSupabaseConfig } from "@/lib/supabase/env";
+import { hasDatabaseConfig } from "@/lib/db/pool";
 
 export default async function LoginPage() {
-  if (!hasSupabaseConfig()) redirect("/");
+  if (!hasDatabaseConfig()) redirect("/");
   const user = await getCurrentUser();
   if (user) redirect("/");
 

@@ -1,4 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
+import { randomUUID } from "crypto";
+import fs from "fs/promises";
+import path from "path";
+import { query } from "@/lib/db/pool";
 import type {
   Comment,
   Feedback,
@@ -6,6 +9,14 @@ import type {
   FeedbackType,
   User,
 } from "@/lib/types";
+
+export type FeedbackFilters = {
+  status?: FeedbackStatus | "all";
+  team?: string;
+  product_area?: string;
+  type?: FeedbackType | "all";
+  q?: string;
+};
 
 type FeedbackRow = {
   id: string;
@@ -17,28 +28,20 @@ type FeedbackRow = {
   product_area: string | null;
   screenshot_path: string | null;
   author_id: string;
+  author_name: string;
   created_at: string;
   updated_at: string;
-  author?: { name: string } | { name: string }[] | null;
-  comments?: { count: number }[] | null;
+  comment_count: number | string;
 };
 
 type CommentRow = {
   id: string;
   feedback_id: string;
   author_id: string;
+  author_name: string;
   body: string;
   created_at: string;
-  author?: { name: string } | { name: string }[] | null;
 };
-
-function authorName(
-  author: { name: string } | { name: string }[] | null | undefined,
-) {
-  if (!author) return "Unknown";
-  if (Array.isArray(author)) return author[0]?.name || "Unknown";
-  return author.name;
-}
 
 function mapFeedback(row: FeedbackRow): Feedback {
   return {
@@ -51,10 +54,16 @@ function mapFeedback(row: FeedbackRow): Feedback {
     product_area: row.product_area,
     screenshot_path: row.screenshot_path,
     author_id: row.author_id,
-    author_name: authorName(row.author),
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    comment_count: row.comments?.[0]?.count ?? 0,
+    author_name: row.author_name,
+    created_at:
+      typeof row.created_at === "string"
+        ? row.created_at
+        : new Date(row.created_at).toISOString(),
+    updated_at:
+      typeof row.updated_at === "string"
+        ? row.updated_at
+        : new Date(row.updated_at).toISOString(),
+    comment_count: Number(row.comment_count) || 0,
   };
 }
 
@@ -63,96 +72,88 @@ function mapComment(row: CommentRow): Comment {
     id: row.id,
     feedback_id: row.feedback_id,
     author_id: row.author_id,
-    author_name: authorName(row.author),
+    author_name: row.author_name,
     body: row.body,
-    created_at: row.created_at,
+    created_at:
+      typeof row.created_at === "string"
+        ? row.created_at
+        : new Date(row.created_at).toISOString(),
   };
 }
 
-export type FeedbackFilters = {
-  status?: FeedbackStatus | "all";
-  team?: string;
-  product_area?: string;
-  type?: FeedbackType | "all";
-  q?: string;
-};
-
-const FEEDBACK_SELECT = `
-  id, title, body, type, status, team, product_area, screenshot_path,
-  author_id, created_at, updated_at,
-  author:profiles!author_id(name),
-  comments(count)
-`;
-
 export async function listUsers(): Promise<User[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, name, email, role")
-    .order("name");
-  if (error) throw error;
-  return (data || []) as User[];
+  const { rows } = await query<User>(
+    `select id, name, email, role from profiles order by name`,
+  );
+  return rows;
 }
 
 export async function getUser(id: string): Promise<User | undefined> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, name, email, role")
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
-  return (data as User | null) || undefined;
+  const { rows } = await query<User>(
+    `select id, name, email, role from profiles where id = $1`,
+    [id],
+  );
+  return rows[0];
 }
 
 export async function listFeedback(
   filters: FeedbackFilters = {},
 ): Promise<Feedback[]> {
-  const supabase = await createClient();
-  let query = supabase.from("feedback").select(FEEDBACK_SELECT);
+  const clauses: string[] = [];
+  const params: unknown[] = [];
 
   if (filters.status && filters.status !== "all") {
-    query = query.eq("status", filters.status);
+    params.push(filters.status);
+    clauses.push(`f.status = $${params.length}`);
   }
   if (filters.team && filters.team !== "all") {
-    query = query.eq("team", filters.team);
+    params.push(filters.team);
+    clauses.push(`f.team = $${params.length}`);
   }
   if (filters.product_area && filters.product_area !== "all") {
-    query = query.eq("product_area", filters.product_area);
+    params.push(filters.product_area);
+    clauses.push(`f.product_area = $${params.length}`);
   }
   if (filters.type && filters.type !== "all") {
-    query = query.eq("type", filters.type);
+    params.push(filters.type);
+    clauses.push(`f.type = $${params.length}`);
   }
   if (filters.q?.trim()) {
-    const q = filters.q.trim();
-    query = query.or(`title.ilike.%${q}%,body.ilike.%${q}%`);
+    params.push(`%${filters.q.trim()}%`);
+    clauses.push(
+      `(f.title ilike $${params.length} or f.body ilike $${params.length})`,
+    );
   }
 
-  const { data, error } = await query.order("updated_at", { ascending: false });
-  if (error) throw error;
-
-  const items = ((data || []) as FeedbackRow[]).map(mapFeedback);
-  const rank: Record<FeedbackStatus, number> = {
-    new: 0,
-    in_progress: 1,
-    done: 2,
-  };
-  return items.sort((a, b) => {
-    const byStatus = rank[a.status] - rank[b.status];
-    if (byStatus !== 0) return byStatus;
-    return b.updated_at.localeCompare(a.updated_at);
-  });
+  const where = clauses.length ? `where ${clauses.join(" and ")}` : "";
+  const { rows } = await query<FeedbackRow>(
+    `select f.id, f.title, f.body, f.type, f.status, f.team, f.product_area,
+            f.screenshot_path, f.author_id, f.created_at, f.updated_at,
+            p.name as author_name,
+            (select count(*) from comments c where c.feedback_id = f.id) as comment_count
+     from feedback f
+     join profiles p on p.id = f.author_id
+     ${where}
+     order by
+       case f.status when 'new' then 0 when 'in_progress' then 1 else 2 end,
+       f.updated_at desc`,
+    params,
+  );
+  return rows.map(mapFeedback);
 }
 
 export async function getFeedback(id: string): Promise<Feedback | undefined> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("feedback")
-    .select(FEEDBACK_SELECT)
-    .eq("id", id)
-    .maybeSingle();
-  if (error) throw error;
-  return data ? mapFeedback(data as FeedbackRow) : undefined;
+  const { rows } = await query<FeedbackRow>(
+    `select f.id, f.title, f.body, f.type, f.status, f.team, f.product_area,
+            f.screenshot_path, f.author_id, f.created_at, f.updated_at,
+            p.name as author_name,
+            (select count(*) from comments c where c.feedback_id = f.id) as comment_count
+     from feedback f
+     join profiles p on p.id = f.author_id
+     where f.id = $1`,
+    [id],
+  );
+  return rows[0] ? mapFeedback(rows[0]) : undefined;
 }
 
 export async function createFeedback(input: {
@@ -164,23 +165,22 @@ export async function createFeedback(input: {
   screenshot_path?: string | null;
   author_id: string;
 }): Promise<Feedback> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("feedback")
-    .insert({
-      title: input.title,
-      body: input.body,
-      type: input.type,
-      team: input.team ?? null,
-      product_area: input.product_area ?? null,
-      screenshot_path: input.screenshot_path ?? null,
-      author_id: input.author_id,
-      status: "new",
-    })
-    .select(FEEDBACK_SELECT)
-    .single();
-  if (error) throw error;
-  return mapFeedback(data as FeedbackRow);
+  const { rows } = await query<{ id: string }>(
+    `insert into feedback
+      (title, body, type, status, team, product_area, screenshot_path, author_id)
+     values ($1, $2, $3, 'new', $4, $5, $6, $7)
+     returning id`,
+    [
+      input.title,
+      input.body,
+      input.type,
+      input.team ?? null,
+      input.product_area ?? null,
+      input.screenshot_path ?? null,
+      input.author_id,
+    ],
+  );
+  return (await getFeedback(rows[0].id))!;
 }
 
 export async function updateFeedback(
@@ -191,31 +191,39 @@ export async function updateFeedback(
     product_area: string | null;
   }>,
 ): Promise<Feedback | undefined> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("feedback")
-    .update(patch)
-    .eq("id", id)
-    .select(FEEDBACK_SELECT)
-    .maybeSingle();
-  if (error) throw error;
-  return data ? mapFeedback(data as FeedbackRow) : undefined;
+  const existing = await getFeedback(id);
+  if (!existing) return undefined;
+
+  await query(
+    `update feedback
+     set status = $2,
+         team = $3,
+         product_area = $4,
+         updated_at = now()
+     where id = $1`,
+    [
+      id,
+      patch.status ?? existing.status,
+      patch.team !== undefined ? patch.team : existing.team,
+      patch.product_area !== undefined
+        ? patch.product_area
+        : existing.product_area,
+    ],
+  );
+  return getFeedback(id);
 }
 
 export async function listComments(feedbackId: string): Promise<Comment[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("comments")
-    .select(
-      `
-      id, feedback_id, author_id, body, created_at,
-      author:profiles!author_id(name)
-    `,
-    )
-    .eq("feedback_id", feedbackId)
-    .order("created_at", { ascending: true });
-  if (error) throw error;
-  return ((data || []) as CommentRow[]).map(mapComment);
+  const { rows } = await query<CommentRow>(
+    `select c.id, c.feedback_id, c.author_id, c.body, c.created_at,
+            p.name as author_name
+     from comments c
+     join profiles p on p.id = c.author_id
+     where c.feedback_id = $1
+     order by c.created_at asc`,
+    [feedbackId],
+  );
+  return rows.map(mapComment);
 }
 
 export async function addComment(input: {
@@ -223,72 +231,48 @@ export async function addComment(input: {
   author_id: string;
   body: string;
 }): Promise<Comment> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("comments")
-    .insert({
-      feedback_id: input.feedback_id,
-      author_id: input.author_id,
-      body: input.body,
-    })
-    .select(
-      `
-      id, feedback_id, author_id, body, created_at,
-      author:profiles!author_id(name)
-    `,
-    )
-    .single();
-  if (error) throw error;
-
-  // Bump parent updated_at for board sorting
-  await supabase
-    .from("feedback")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", input.feedback_id);
-
-  return mapComment(data as CommentRow);
+  const { rows } = await query<{ id: string }>(
+    `insert into comments (feedback_id, author_id, body)
+     values ($1, $2, $3)
+     returning id`,
+    [input.feedback_id, input.author_id, input.body],
+  );
+  await query(`update feedback set updated_at = now() where id = $1`, [
+    input.feedback_id,
+  ]);
+  const { rows: full } = await query<CommentRow>(
+    `select c.id, c.feedback_id, c.author_id, c.body, c.created_at,
+            p.name as author_name
+     from comments c
+     join profiles p on p.id = c.author_id
+     where c.id = $1`,
+    [rows[0].id],
+  );
+  return mapComment(full[0]);
 }
 
 export async function countByStatus(): Promise<Record<FeedbackStatus, number>> {
-  const supabase = await createClient();
+  const { rows } = await query<{ status: FeedbackStatus; c: string }>(
+    `select status, count(*)::text as c from feedback group by status`,
+  );
   const result: Record<FeedbackStatus, number> = {
     new: 0,
     in_progress: 0,
     done: 0,
   };
-
-  const statuses: FeedbackStatus[] = ["new", "in_progress", "done"];
-  await Promise.all(
-    statuses.map(async (status) => {
-      const { count, error } = await supabase
-        .from("feedback")
-        .select("id", { count: "exact", head: true })
-        .eq("status", status);
-      if (error) throw error;
-      result[status] = count || 0;
-    }),
-  );
-
+  for (const row of rows) result[row.status] = Number(row.c) || 0;
   return result;
 }
 
 export async function uploadScreenshot(
-  userId: string,
+  _userId: string,
   file: File,
 ): Promise<string> {
-  const supabase = await createClient();
   const ext = file.type.split("/")[1]?.replace("jpeg", "jpg") || "png";
-  const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+  const filename = `${randomUUID()}.${ext}`;
+  const dir = path.join(process.cwd(), "public", "uploads");
+  await fs.mkdir(dir, { recursive: true });
   const buffer = Buffer.from(await file.arrayBuffer());
-
-  const { error } = await supabase.storage
-    .from("screenshots")
-    .upload(path, buffer, {
-      contentType: file.type,
-      upsert: false,
-    });
-  if (error) throw error;
-
-  const { data } = supabase.storage.from("screenshots").getPublicUrl(path);
-  return data.publicUrl;
+  await fs.writeFile(path.join(dir, filename), buffer);
+  return `/uploads/${filename}`;
 }

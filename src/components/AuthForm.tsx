@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
@@ -16,35 +15,23 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
     setPending(true);
 
     const form = new FormData(e.currentTarget);
-    const email = String(form.get("email") || "").trim();
-    const password = String(form.get("password") || "");
-    const name = String(form.get("name") || "").trim();
-    const supabase = createClient();
+    const payload = {
+      email: String(form.get("email") || "").trim(),
+      password: String(form.get("password") || ""),
+      name: String(form.get("name") || "").trim(),
+    };
 
     try {
-      if (mode === "signup") {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { name, role: "member" },
-          },
-        });
-        if (signUpError) throw signUpError;
-        if (!data.session) {
-          setError(
-            "Account created. Confirm your email (or disable Confirm email in Supabase) then sign in.",
-          );
-          setPending(false);
-          return;
-        }
-      } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
-      }
+      const res = await fetch(
+        mode === "login" ? "/api/auth/login" : "/api/auth/signup",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Authentication failed");
 
       router.push("/");
       router.refresh();

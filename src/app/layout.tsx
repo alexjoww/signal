@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import { AppHeader } from "@/components/AppHeader";
 import { getCurrentUser } from "@/lib/auth";
-import { hasSupabaseConfig } from "@/lib/supabase/env";
+import { hasDatabaseConfig } from "@/lib/db/pool";
 import "./globals.css";
 
 const display = Bricolage_Grotesque({
@@ -30,7 +30,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const user = hasSupabaseConfig() ? await getCurrentUser() : null;
+  const user = hasDatabaseConfig() ? await getCurrentUser() : null;
 
   return (
     <html lang="en">
