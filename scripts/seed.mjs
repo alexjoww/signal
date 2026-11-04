@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Seeds Supabase Auth users + sample feedback.
- * Requires env: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+ * Requires env: NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SECRET_KEY
+ * (legacy SUPABASE_SERVICE_ROLE_KEY also accepted)
  *
  * Usage: npm run db:seed
  */
@@ -12,11 +13,12 @@ config({ path: ".env.local" });
 config();
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const serviceKey =
+  process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!url || !serviceKey) {
   console.error(
-    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
+    "Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY (or SERVICE_ROLE_KEY)",
   );
   process.exit(1);
 }

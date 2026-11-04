@@ -12,9 +12,9 @@ export default async function HomePage() {
         </h1>
         <p className="mt-4 text-[var(--ink-soft)]">
           Set <code>NEXT_PUBLIC_SUPABASE_URL</code>,{" "}
-          <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>, and{" "}
-          <code>SUPABASE_SERVICE_ROLE_KEY</code>, then run the SQL migration and
-          seed script.
+          <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>, and{" "}
+          <code>SUPABASE_SECRET_KEY</code>, then run the SQL migration and seed
+          script.
         </p>
       </div>
     );

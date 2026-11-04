@@ -13,9 +13,11 @@ cp .env.example .env.local
 
 Fill in from **Project Settings → API**:
 
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_URL` — Project URL
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — publishable key (`sb_publishable_…`)
+- `SUPABASE_SECRET_KEY` — secret key (`sb_secret_…`, server only)
+
+Legacy `anon` / `service_role` JWT keys are still accepted via `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY`.
 
 3. Apply the schema in the Supabase **SQL Editor** (run the full file):
 
