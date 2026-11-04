@@ -17,14 +17,34 @@ export function getSecretKey() {
 }
 
 /**
- * Accept Project URL, or a common mix-up (db.<ref>.supabase.co host),
- * and normalize to https://<ref>.supabase.co.
+ * Accept Project URL, db host, or a Postgres URI mix-up, and normalize to
+ * https://<project-ref>.supabase.co.
  */
 export function normalizeSupabaseUrl(raw: string) {
   let url = raw.trim().replace(/\/$/, "");
+
+  // Accidental database connection string in the URL secret
+  if (/^postgres(ql)?:\/\//i.test(url)) {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname;
+      const dbHost = host.match(/^(?:db\.)?([a-z0-9]+)\.supabase\.co$/i);
+      if (dbHost) {
+        return `https://${dbHost[1].toLowerCase()}.supabase.co`;
+      }
+      const user = decodeURIComponent(parsed.username || "");
+      const poolerUser = user.match(/^postgres\.([a-z0-9]+)$/i);
+      if (poolerUser) {
+        return `https://${poolerUser[1].toLowerCase()}.supabase.co`;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
   if (url.startsWith("db.") && url.endsWith(".supabase.co") && !url.includes("://")) {
     url = `https://${url.slice(3)}`;
-  } else if (!/^https?:\/\//i.test(url)) {
+  } else if (url && !/^https?:\/\//i.test(url)) {
     url = `https://${url}`;
   }
   return url;

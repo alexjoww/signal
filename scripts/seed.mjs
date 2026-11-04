@@ -16,6 +16,22 @@ function normalizeSupabaseUrl(raw) {
   let url = String(raw || "")
     .trim()
     .replace(/\/$/, "");
+  if (/^postgres(ql)?:\/\//i.test(url)) {
+    try {
+      const parsed = new URL(url);
+      const dbHost = parsed.hostname.match(
+        /^(?:db\.)?([a-z0-9]+)\.supabase\.co$/i,
+      );
+      if (dbHost) return `https://${dbHost[1].toLowerCase()}.supabase.co`;
+      const user = decodeURIComponent(parsed.username || "");
+      const poolerUser = user.match(/^postgres\.([a-z0-9]+)$/i);
+      if (poolerUser) {
+        return `https://${poolerUser[1].toLowerCase()}.supabase.co`;
+      }
+    } catch {
+      // fall through
+    }
+  }
   if (
     url.startsWith("db.") &&
     url.endsWith(".supabase.co") &&
