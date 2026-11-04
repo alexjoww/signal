@@ -9,10 +9,26 @@
 import { createClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
 
-config({ path: ".env.local" });
-config();
+config({ path: ".env.local", override: true });
+config({ override: false });
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+function normalizeSupabaseUrl(raw) {
+  let url = String(raw || "")
+    .trim()
+    .replace(/\/$/, "");
+  if (
+    url.startsWith("db.") &&
+    url.endsWith(".supabase.co") &&
+    !url.includes("://")
+  ) {
+    url = `https://${url.slice(3)}`;
+  } else if (url && !/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+  return url;
+}
+
+const url = normalizeSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const serviceKey =
   process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 

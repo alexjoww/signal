@@ -4,7 +4,13 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  let url = rawUrl.trim().replace(/\/$/, "");
+  if (url.startsWith("db.") && url.endsWith(".supabase.co") && !url.includes("://")) {
+    url = `https://${url.slice(3)}`;
+  } else if (url && !/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
   const anonKey =
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

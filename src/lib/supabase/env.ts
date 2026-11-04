@@ -16,8 +16,27 @@ export function getSecretKey() {
   );
 }
 
+/**
+ * Accept Project URL, or a common mix-up (db.<ref>.supabase.co host),
+ * and normalize to https://<ref>.supabase.co.
+ */
+export function normalizeSupabaseUrl(raw: string) {
+  let url = raw.trim().replace(/\/$/, "");
+  if (url.startsWith("db.") && url.endsWith(".supabase.co") && !url.includes("://")) {
+    url = `https://${url.slice(3)}`;
+  } else if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+  return url;
+}
+
+export function getSupabaseUrl() {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  return raw ? normalizeSupabaseUrl(raw) : "";
+}
+
 export function getSupabaseEnv() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = getSupabaseUrl();
   const anonKey = getPublishableKey();
 
   if (!url || !anonKey) {
@@ -40,5 +59,5 @@ export function getServiceRoleKey() {
 }
 
 export function hasSupabaseConfig() {
-  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && getPublishableKey());
+  return Boolean(getSupabaseUrl() && getPublishableKey());
 }
